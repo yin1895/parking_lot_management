@@ -1,0 +1,2 @@
+# parking_lot_management
+一个基于Python的智能停车场管理系统，集成了车牌识别功能，支持实时摄像头识别和停车记录管理。
