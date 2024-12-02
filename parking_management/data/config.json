@@ -1,7 +1,8 @@
 {
     "parking_lot": {
         "total_spaces": 100,
-        "hourly_rate": 5
+        "hourly_rate": 5,
+        "member_hourly_rate": 3
     },
     "gui": {
         "window_title": "停车场管理系统",
