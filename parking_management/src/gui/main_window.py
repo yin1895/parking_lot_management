@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PySide6.QtCore import Qt, QTimer, QSize, QTime
 from PySide6.QtGui import QImage, QPixmap, QFont, QIcon
 import sys
+import pyttsx3
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from src.core.parking_lot import ParkingLot
@@ -57,7 +58,7 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # 创建主布局
+        # 创建布局
         main_layout = QHBoxLayout(central_widget)
         
         # 左侧面板（状态和操作区）
@@ -122,7 +123,7 @@ class MainWindow(QMainWindow):
         self.entry_button = QPushButton("车辆入场")
         self.exit_button = QPushButton("车辆出场")
         
-        # 在这里连接按钮信号
+        # 连接按钮信号
         self.entry_button.clicked.connect(self.handle_entry)
         self.exit_button.clicked.connect(self.handle_exit)
         
@@ -309,25 +310,6 @@ class MainWindow(QMainWindow):
         # 停止摄像头
         self.stop_camera()
 
-    def handle_file_recognition(self):
-        """处理图片文件识别"""
-        if not self.plate_recognizer:
-            return
-            
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择图片",
-            "",
-            "图片文件 (*.png *.jpg *.jpeg)"
-        )
-        
-        if file_path:
-            success, result = self.plate_recognizer.process_image(file_path)
-            if success:
-                self.plate_input.setText(result)
-                QMessageBox.information(self, "识别成功", f"识别到车牌号：{result}")
-            else:
-                QMessageBox.warning(self, "识别失败", result)
 
     def update_display(self):
         """更新显示信息"""
@@ -354,6 +336,7 @@ class MainWindow(QMainWindow):
         if success:
             QMessageBox.information(self, "成功", message)
             self.plate_input.clear()
+            self.speak(f"{plate} 欢迎入场")  # 播报入场信息
         else:
             QMessageBox.warning(self, "失败", message)
         self.update_display()
@@ -369,6 +352,7 @@ class MainWindow(QMainWindow):
         if success:
             QMessageBox.information(self, "成功", message)
             self.plate_input.clear()
+            self.speak(f"{plate} 一路顺风")  # 播报出场信息
         else:
             QMessageBox.warning(self, "失败", message)
         self.update_display()
@@ -388,6 +372,13 @@ class MainWindow(QMainWindow):
         """显示管理界面"""
         admin_panel = AdminPanel(self)
         admin_panel.exec()
+
+    def speak(self, text):
+        """播报文本信息"""
+        
+        engine = pyttsx3.init()
+        engine.say(text)
+        engine.runAndWait()
 
 class LoginDialog(QDialog):
     def __init__(self, parent=None):

@@ -30,7 +30,7 @@ class LoginDialog(QDialog):
         username = self.username_input.text()
         password = self.password_input.text()
         
-        # 假设管理员账号为admin，密码为1234
+        # 默认管理员账号为admin，密码为1234
         if username == "admin" and password == "1234":
             self.accept()
         else:
