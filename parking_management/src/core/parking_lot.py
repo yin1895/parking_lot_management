@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import re
 from src.utils.config import Config
+from src.utils.logger import get_logger
 import math
 
 class ParkingLot:
@@ -12,6 +13,8 @@ class ParkingLot:
         self.total_spaces = self.config.get('parking_lot', 'total_spaces')
         self.hourly_rate = self.config.get('parking_lot', 'hourly_rate')
         self.member_hourly_rate = self.config.get('parking_lot', 'member_hourly_rate')
+        self.logger = get_logger('ParkingLot')
+        self.logger.info('ParkingLot 初始化')
         
         # 初始化可用车位数量
         self.available_spaces = self.total_spaces
@@ -19,19 +22,21 @@ class ParkingLot:
         # 初始化闸门状态
         self.gate_status = "closed"
         
-        # 创建数据目录
-        os.makedirs('data', exist_ok=True)
-        
+        # 使用配置中的 data dir
+        data_dir = self.config.get_data_dir()
+        os.makedirs(data_dir, exist_ok=True)
+
         # 数据文件路径
-        self.data_file = os.path.join('data', 'parking_records.csv')
-        
+        self.data_file = self.config.records_file
+
         # 会员数据文件路径
-        self.members_file = os.path.join('data', 'members.csv')
+        self.members_file = self.config.members_file
         self.load_members()
-        
+
         # 初始化或加载数据
         if os.path.exists(self.data_file):
             self.records = pd.read_csv(self.data_file)
+            self.logger.debug(f'加载记录文件: {self.data_file}, 共 {len(self.records)} 条')
             # 确保时间列的格式正确
             for col in ['Entry Time', 'Exit Time']:
                 if col in self.records.columns:
@@ -48,25 +53,57 @@ class ParkingLot:
     def load_members(self):
         """加载会员数据"""
         try:
-            if os.path.exists(self.members_file):
-                members_df = pd.read_csv(self.members_file)
-                members_df['member_since'] = pd.to_datetime(members_df['member_since'])
+            if os.path.exists(self.members_file): 
+                try:
+                    members_df = pd.read_csv(self.members_file)
+                except pd.errors.EmptyDataError:
+                    # 成员文件存在但为空，视为没有会员，不记录为异常
+                    self.members = []
+                    return
+                self.logger.debug(f'从 {self.members_file} 加载会员数据, rows={len(members_df)}')
+                if 'member_since' in members_df.columns:
+                    members_df['member_since'] = pd.to_datetime(members_df['member_since'], errors='coerce')
+                else:
+                    members_df['member_since'] = pd.NaT
+                # ensure 'plate' column exists
+                if 'plate' not in members_df.columns and len(members_df.columns) > 0:
+                    members_df = members_df.rename(columns={members_df.columns[0]: 'plate'})
                 self.members = members_df.to_dict('records')
             else:
                 self.members = []
                 self._save_members()
         except Exception:
+            # 记录异常但不终止
+            try:
+                self.logger.exception('加载会员数据失败')
+            except Exception:
+                pass
             self.members = []
 
     def _save_members(self):
         """保存会员数据"""
         members_df = pd.DataFrame(self.members)
         os.makedirs(os.path.dirname(self.members_file), exist_ok=True)
-        members_df.to_csv(self.members_file, index=False)
+        try:
+            members_df.to_csv(self.members_file, index=False)
+            self.logger.debug(f'已保存会员数据到 {self.members_file}, rows={len(members_df)}')
+        except Exception:
+            try:
+                self.logger.exception('保存会员数据失败')
+            except Exception:
+                pass
 
     def save_members(self):
         """保存会员数据"""
-        pd.DataFrame({'plate': self.members}).to_csv(self.members_file, index=False)
+        try:
+            members_df = pd.DataFrame(self.members) 
+            members_df.to_csv(self.members_file, index=False)
+            self.logger.debug(f'保存会员数据 (save_members) 到 {self.members_file}')
+        except Exception:
+            try:
+                self.logger.exception('保存会员数据失败')
+            except Exception:
+                pass
 
     def get_members(self):
         """获取所有会员"""
@@ -79,23 +116,26 @@ class ParkingLot:
         Returns:
             bool: 是否添加成功
         """
-        if plate not in self.members:
-            member_record = {
-                'plate': plate,
-                'member_since': datetime.now(),
-                'status': 'active'
-            }
-            self.members.append(member_record)
-            self._save_members()
-            return True
-        return False
+        # 判断是否已存在激活会员
+        for m in self.members:
+            if m.get('plate') == plate and m.get('status') == 'active':
+                return False
+        member_record = {
+            'plate': plate,
+            'member_since': datetime.now(),
+            'status': 'active'
+        }
+        self.members.append(member_record)
+        self._save_members()
+        return True
 
     def delete_member(self, plate):
         """删除会员"""
-        if plate in self.members:
-            self.members.remove(plate)
-            self.save_members()
-            return True
+        for m in list(self.members):
+            if m.get('plate') == plate:
+                self.members.remove(m)
+                self._save_members()
+                return True
         return False
 
     def is_member(self, plate):
@@ -155,10 +195,14 @@ class ParkingLot:
     def _save_records(self):
         """保存记录到CSV文件"""
         os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
-        self.records.to_csv(self.data_file, index=False)
-        # 保存价格到配置文件
-        self.config.set('parking_lot', 'hourly_rate', self.hourly_rate)
-        self.config._save_config()
+        try:
+            os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
+            self.records.to_csv(self.data_file, index=False)
+            self.logger.debug(f'已保存记录到 {self.data_file}, 总条数 {len(self.records)}')
+            # 保存价格到配置文件
+            self.config.set('parking_lot', 'hourly_rate', self.hourly_rate)
+        except Exception:
+            self.logger.exception('保存记录失败')
 
     def validate_license_plate(self, plate):
         """验证车牌号格式"""
@@ -210,10 +254,16 @@ class ParkingLot:
         if len(self.records) > 0:
             new_record = new_record.astype(self.records.dtypes)
         
-        self.records = pd.concat([self.records, new_record], ignore_index=True)
+        # 如果当前 records 为空，直接赋值以避免 pd.concat 在空或全 NA 条目上的未来行为变化警告
+        if self.records is None or len(self.records) == 0:
+            # reset_index to ensure a clean 0..n index
+            self.records = new_record.reset_index(drop=True)
+        else:
+            self.records = pd.concat([self.records, new_record], ignore_index=True)
         self.available_spaces -= 1
         self._save_records()
-        
+        self.logger.info(f'process_entry: plate={plate}, entry_time={entry_time}, available_spaces={self.available_spaces}')
+
         return True, f"车辆 {plate} 已成功入场"
 
     def process_exit(self, plate):
@@ -237,7 +287,8 @@ class ParkingLot:
         self.records.loc[current_record.index, 'Fee'] = fee
         self.available_spaces += 1
         self._save_records()
-        
+        self.logger.info(f'process_exit: plate={plate}, entry_time={entry_time}, exit_time={exit_time}, fee={fee}, available_spaces={self.available_spaces}')
+
         return True, f"车辆 {plate} 已出场，费用：{fee}元"
 
     def get_records_by_date(self, date):

@@ -1,0 +1,21 @@
+{
+    "parking_lot": {
+        "total_spaces": 100,
+        "hourly_rate": 5,
+        "member_hourly_rate": 3
+    },
+    "gui": {
+        "window_title": "停车场管理系统",
+        "window_size": {
+            "width": 800,
+            "height": 600
+        },
+        "refresh_rate": 1000
+    },
+    "data": {
+        "records_file": "parking_records.csv",
+        "members_file": "members.csv",
+        "data_dir": "data",
+        "last_camera_index": 1
+    }
+}

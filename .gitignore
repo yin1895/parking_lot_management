@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+eggs/
+*.egg-info/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Pytest cache
+.pytest_cache/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Model checkpoints (common large files) - ignore checkpoint/binary models but keep committed ONNX inference weights if required
+weights/*.ckpt
+weights/*.pth
+weights/*.pt
+weights/*.h5
+# If you keep large ONNX files locally and don't want them versioned, uncomment:
+# weights/*.onnx
+
+# Ignore compiled Python files under repository sources (safe to remove)
+**/__pycache__/**
+**/*.pyc
+
+# Other
+coverage.xml
+htmlcov/
+report/
+.github
+.venv
