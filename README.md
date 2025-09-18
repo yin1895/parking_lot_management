@@ -39,7 +39,7 @@
 - Python 3.8+
 - OpenCV
 - PySide6
-- ONNX Runtime
+- ONNX Runtime (推荐 `onnxruntime-gpu` 用于启用 CUDA 加速，若无 GPU 则可回退到 CPU 版本)
 - Pandas
 - 其他依赖见 requirements.txt
 
@@ -106,63 +106,104 @@ python main.py
 
 ## 项目结构
 
+# 智能停车场管理系统
+
+这是一个基于 Python 的智能停车场管理示例项目，包含摄像头车牌检测与识别、车辆进出记录、会员与计费管理以及图形化管理界面。
+
+本仓库是我的计算机视觉学习副产物，侧重于工程化（配置、日志、UI 可用性）与可维护性。项目的车牌识别核心（模型与解码逻辑）为关键逻辑，且耦合度很低。PS：如果你有毕设、生产需求可以cv拿走，但是请尽量保持不变，可仅在外围加入可配置项与异步调用以提升稳定性。
+
+## 快速开始
+
+环境要求
+- **Python 3.8+**（项目已针对 3.10/3.13 做兼容性处理）  
+  **注意：经测试反馈，在 Python 3.8 环境下偶见识别模块导入失败问题，迁移至高版本可解决此问题。**
+- OpenCV
+- PySide6
+- ONNX Runtime（建议安装 `onnxruntime-gpu` 以启用 CUDA 加速；如无 GPU 环境可使用 `onnxruntime` CPU 版本）
+- pandas
+
+1. 克隆仓库并进入目录
+
+```powershell
+git clone https://github.com/yin1895/parking-management.git
+cd parking-management
 ```
-parking_management/
-├── data/           # 数据和配置文件
-├── weights/        # 模型文件
-├── src/           # 源代码
-│   ├── core/      # 核心业务逻辑
-│   ├── gui/       # 图形界面
-│   └── utils/     # 工具类
-├── main.py        # 程序入口
-└── requirements.txt # 项目依赖
+
+2. 创建并激活虚拟环境（示例 Windows + venv）
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-## 配置说明
+3. 安装依赖
 
-系统配置文件位于 `data/config.json`，可以修改以下参数：
-- 停车场容量
-- 计费标准（普通/会员）
-- 界面刷新率
-- 其他系统参数
+```powershell
+pip install -r parking_management/requirements.txt
+# 若要启用 GPU 加速（Windows + CUDA），推荐先安装对应的 wheel，例如：
+# pip install onnxruntime-gpu
+```
 
-## 常见问题
+4. 运行测试（可选）
 
-1. 摄像头无法打开
-   - 检查摄像头连接
-   - 确认摄像头未被其他程序占用
-   - 检查摄像头驱动是否正确安装
-   - 请检查摄像头物理开关是否打开
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```
 
-2. 车牌识别不准确
-   - 确保光线充足
-   - 调整摄像头角度
-   - 确保车牌在画面中清晰可见
+5. 启动程序
 
-3. 管理员登录问题
-   - 确认使用默认账号密码
-   - 检查输入是否正确
-   - 注意大小写
+```powershell
+python parking_management\main.py
+```
 
-## 开发计划
+## 主要功能
 
-- [x] 添加会员管理功能
-- [x] 实现分段计费系统
-- [x] 添加历史记录查询
-- [ ] 添加数据统计和报表功能
-- [ ] 优化车牌识别准确率
-- [ ] 添加更多用户权限管理
-- [ ] 支持多摄像头接入
+- 实时车牌检测与识别（基于 ONNX 模型）
+- 支持摄像头实时识别与手动上传图片识别（异步、QThread）
+- 多摄像头选择（自动探测常见索引）
+- 车辆入/出管理与分段计费，支持会员差异化计费
+- 管理员面板与会员管理
 
-## 贡献指南
+## 配置
 
-欢迎提交 Issue 和 Pull Request 来帮助改进项目。
+项目默认配置位于 `parking_management/data/config.json`，可通过该文件或环境变量覆盖以下项（示例）：
+
+- 模型文件路径
+- GUI 刷新率
+- 停车场容量与计费规则
+
+不要在未备份的情况下修改识别模型文件（weights），除非你清楚改动影响；识别算法核心已被视为不可随意更改的敏感部分。
+
+## 清理与常见问题
+
+- 如果你遇到奇怪的问题(例如识别模块忽然无法导入)或想要减小仓库体积，可以删除 Python 编译缓存：
+
+```powershell
+Get-ChildItem -Path . -Recurse -Include '__pycache__','*.pyc' | Where-Object { $_.FullName -notmatch '\.venv\\' } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
+```
+
+- 摄像头无法打开：检查权限、驱动、设备索引（ControlPanel 自动探测 0..4）、某些设备有物理开关
+- 识别不准确：改善光线、调整摄像头角度或图片清晰度
+
+## 开发与变更记录（近期）
+
+- 重构：将 GUI 组件化（StatusPanel、CameraPanel、ControlPanel、VehicleTable），简化主窗口职责
+- 增强：添加多摄像头选择、手动图片上传与拖放、异步识别 `RecognizeWorker(QThread)`
+- 改进：集中化配置、日志（旋转日志）与对 ParkingLot 的健壮性改进
+- 保留原则：车牌识别的核心逻辑未被修改，仅添加了可配置参数与外围预处理选项
+
+## 贡献
+
+欢迎提交 issue 或 pull request。提交前请确保：
+
+- 运行并通过现有测试
+- 说明你遇到的和解决的问题
+- 遵守 `.gitignore` 里的规则，不提交编译缓存
 
 ## 许可证
 
-本项目采用 [MIT 许可证](LICENSE)。
+MIT License — 详情见 LICENSE 文件
 
-## 联系方式
+## 联系
 
-如有问题或建议，请通过以下方式联系：
-- Email: 3023001549@tju.edu.cn
+Feel Free To Contact Me：3023001549@tju.edu.cn
