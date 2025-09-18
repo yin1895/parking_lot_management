@@ -140,70 +140,133 @@ python -m venv .venv
 
 ```powershell
 pip install -r parking_management/requirements.txt
-# 若要启用 GPU 加速（Windows + CUDA），推荐先安装对应的 wheel，例如：
-# pip install onnxruntime-gpu
+# 智能停车场管理系统
+
+一个基于 Python 的智能停车场管理系统，集成了车牌检测与识别、车辆进出和会员管理。该项目以工程化、可维护性为目标，车牌识别核心（模型与解码逻辑）为关键部分，已尽量与外围逻辑解耦。
+
+## 功能概览
+
+- 实时车牌检测与识别（支持摄像头与手动图片上传）
+- 多摄像头选择与切换
+- 异步识别（QThread worker），避免阻塞 UI
+- 车辆进/出记录、分段计费与会员规则支持
+- 管理员面板与历史记录查询
+
+## 要求
+
+- Python 3.8+
+- OpenCV
+- PySide6
+- pandas
+- ONNX Runtime（建议安装 `onnxruntime-gpu` 以启用 CUDA 加速；无 GPU 时回退到 CPU 版本）
+- 其余依赖请参见 `parking_management/requirements.txt`
+
+> 注意：本项目中车牌识别模型和权重文件放在 `parking_management/src/weights/`，不要在未备份情况下随意替换模型文件。
+
+## 快速安装（Windows 示例）
+
+1. 克隆仓库并进入目录：
+
+```powershell
+git clone https://github.com/yin1895/parking-management.git
+cd parking-management
 ```
 
-4. 运行测试（可选）
+2. 创建并激活虚拟环境（建议使用 venv 或 conda）：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+3. 安装依赖：
+
+```powershell
+pip install -r parking_management/requirements.txt
+# 若想启用 GPU（CUDA），可先安装 onnxruntime-gpu：
+# pip install --no-cache-dir onnxruntime-gpu
+```
+
+4. 运行测试（可选）：
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-5. 启动程序
+5. 启动应用：
 
 ```powershell
 python parking_management\main.py
 ```
 
-## 主要功能
+## GPU 加速与 ONNX Runtime（简要说明）
 
-- 实时车牌检测与识别（基于 ONNX 模型）
-- 支持摄像头实时识别与手动上传图片识别（异步、QThread）
-- 多摄像头选择（自动探测常见索引）
-- 车辆入/出管理与分段计费，支持会员差异化计费
-- 管理员面板与会员管理
+- 推荐安装 `onnxruntime-gpu`（在支持的 Windows + CUDA 环境中可显著加快推理）。
+- 代码已实现“GPU 优先、失败回退到 CPU”的策略：程序会尝试使用 CUDAExecutionProvider 加载模型，若失败会自动回退到 CPUExecutionProvider，并在日志中记录所用 provider。
+- 对于大尺寸或高吞吐场景，代码尝试使用 ONNX Runtime 的 IOBinding（若可用）以减少 host<->device 复制，若环境不支持则回退为普通的 `session.run()`。
+
+常见排查命令（在虚拟环境中运行）：
+
+```powershell
+python -c "import onnxruntime as ort; print(getattr(ort,'__file__',None), getattr(ort,'__version__',None), hasattr(ort,'SessionOptions'))"
+```
+
+如果输出显示 `SessionOptions` 不可用或模块路径异常，通常为安装不完整或环境被覆盖（请尝试卸载并重装 `onnxruntime-gpu`）。
+
+## 使用说明（简要）
+
+- 启动后在主界面选择摄像头并点击“开启摄像头”开始实时识别。
+- 系统会在识别时间窗口（可配置）内连续识别并在结束时选择最常见/置信最高的结果填入输入框。
+- 也可通过“上传图片”手动识别单张图片，识别在后台线程执行，不会阻塞 UI。
 
 ## 配置
 
-项目默认配置位于 `parking_management/data/config.json`，可通过该文件或环境变量覆盖以下项（示例）：
+主要配置位于 `parking_management/data/config.json`（也可通过环境变量覆盖常用项）。常见可配置项：
 
-- 模型文件路径
+- 模型路径（detect/rec）
 - GUI 刷新率
-- 停车场容量与计费规则
+- 计费规则与停车容量
 
-不要在未备份的情况下修改识别模型文件（weights），除非你清楚改动影响；识别算法核心已被视为不可随意更改的敏感部分。
+请在修改前备份原配置文件。
 
-## 清理与常见问题
+## 故障排查
 
-- 如果你遇到奇怪的问题(例如识别模块忽然无法导入)或想要减小仓库体积，可以删除 Python 编译缓存：
+- 识别模块无法导入：
+  - 检查虚拟环境是否激活并且已安装 `onnxruntime` 或 `onnxruntime-gpu`。
+  - 尝试卸载并重装：
+
+```powershell
+pip uninstall -y onnxruntime onnxruntime-gpu
+pip install --no-cache-dir onnxruntime-gpu
+```
+
+- 摄像头无法打开：检查设备索引、摄像头权限与驱动，尝试使用系统相机应用确认设备可用。
+- 识别精度低：改善光照、提高分辨率或调整摄像头角度。
+- 清理缓存（删除 Python 字节码）：
 
 ```powershell
 Get-ChildItem -Path . -Recurse -Include '__pycache__','*.pyc' | Where-Object { $_.FullName -notmatch '\.venv\\' } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
 ```
 
-- 摄像头无法打开：检查权限、驱动、设备索引（ControlPanel 自动探测 0..4）、某些设备有物理开关
-- 识别不准确：改善光线、调整摄像头角度或图片清晰度
+## 开发说明（近期改动）
 
-## 开发与变更记录（近期）
+- GUI 组件化（StatusPanel、CameraPanel、ControlPanel、VehicleTable）
+- 增加多摄像头与手动上传图片功能
+- 添加异步识别 worker（QThread）以提升 UI 响应性
+- 增强 ParkingLot 与日志处理的鲁棒性
 
-- 重构：将 GUI 组件化（StatusPanel、CameraPanel、ControlPanel、VehicleTable），简化主窗口职责
-- 增强：添加多摄像头选择、手动图片上传与拖放、异步识别 `RecognizeWorker(QThread)`
-- 改进：集中化配置、日志（旋转日志）与对 ParkingLot 的健壮性改进
-- 保留原则：车牌识别的核心逻辑未被修改，仅添加了可配置参数与外围预处理选项
+车牌识别核心算法在 `parking_management/src/utils/plate_recognizer.py`，为项目敏感核心，外围优化已做但核心识别逻辑尽量保持不变。
 
 ## 贡献
 
-欢迎提交 issue 或 pull request。提交前请确保：
-
-- 运行并通过现有测试
-- 说明你遇到的和解决的问题
-- 遵守 `.gitignore` 里的规则，不提交编译缓存
+- 欢迎提交 issue 和 pull request。提交前请确保：
+  - 运行并通过现有测试
+  - 在 PR 描述中说明修改点与原因
 
 ## 许可证
 
-MIT License — 详情见 LICENSE 文件
+MIT License — 详情见 LICENSE。
 
 ## 联系
 
-Feel Free To Contact Me：3023001549@tju.edu.cn
+若需帮助请发邮件：3023001549@tju.edu.cn
